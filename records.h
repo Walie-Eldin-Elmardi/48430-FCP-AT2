@@ -60,17 +60,19 @@ typedef struct
 
 /* ------------------------------------------------------------------ */
 /* User interface and data management  (main.c / records.c)            */
-/* Author: TBC (proposed: Huy)                                         */
+/* Author: Minh Huy Pham                                               */
 /* ------------------------------------------------------------------ */
 
 /*
  * print_menu
+ * Author: Minh Huy Pham
  * Purpose: print the list of menu options to the terminal.
  */
 void print_menu(void);
 
 /*
  * read_choice
+ * Author: Minh Huy Pham
  * Purpose: read the user's menu choice.
  * Returns: the number chosen, or -1 if the input was not a valid number.
  */
@@ -78,6 +80,7 @@ int read_choice(void);
 
 /*
  * load_records
+ * Author: Minh Huy Pham
  * Purpose: read records from a text file into an array.
  * Inputs : filename    - file to read
  *          records     - destination array
@@ -88,6 +91,7 @@ int load_records(const char filename[], record_t records[], int max_records);
 
 /*
  * save_records
+ * Author: Minh Huy Pham
  * Purpose: write records to a text file.
  * Inputs : filename - file to write
  *          records  - array of records
@@ -98,6 +102,7 @@ int save_records(const char filename[], const record_t records[], int count);
 
 /*
  * display_records
+ * Author: Minh Huy Pham
  * Purpose: print all records to the terminal as a table.
  */
 void display_records(const record_t records[], int count);
@@ -109,6 +114,7 @@ void display_records(const record_t records[], int count);
 
 /*
  * compress_rle
+ * Author: Georgia Gamble
  * Purpose: compress a file using Run-Length Encoding (RLE). Works on raw
  *          bytes, so it does not depend on record_t and can compress any
  *          file. The output is a series of [count][value] byte pairs.
@@ -121,6 +127,7 @@ int compress_rle(const char input_filename[], const char output_filename[]);
 
 /*
  * decompress_rle
+ * Author: Georgia Gamble
  * Purpose: restore a file that was created by compress_rle(). The result
  *          must match the original file byte for byte (lossless).
  * Inputs : input_filename  - compressed file
@@ -132,11 +139,12 @@ int decompress_rle(const char input_filename[], const char output_filename[]);
 
 /* ------------------------------------------------------------------ */
 /* Encryption  (encryption.c)                                          */
-/* Author: TBC (proposed: Wally)                                       */
+/* Author: Wally Elmardi                                               */
 /* ------------------------------------------------------------------ */
 
 /*
  * encrypt_file
+ * Author: Wally Elmardi
  * Purpose: encrypt a file using a repeating-key XOR cipher.
  * Inputs : input_filename  - plain file
  *          output_filename - encrypted file to create
@@ -148,6 +156,7 @@ int encrypt_file(const char input_filename[], const char output_filename[],
 
 /*
  * decrypt_file
+ * Author: Wally Elmardi
  * Purpose: reverse encrypt_file() using the same key.
  * Inputs : input_filename  - encrypted file
  *          output_filename - decrypted file to create
@@ -159,11 +168,12 @@ int decrypt_file(const char input_filename[], const char output_filename[],
 
 /* ------------------------------------------------------------------ */
 /* Searching and sorting  (search_sort.c)                              */
-/* Author: TBC (proposed: Wally)                                       */
+/* Author: Wally Elmardi                                               */
 /* ------------------------------------------------------------------ */
 
 /*
  * search_record
+ * Author: Wally Elmardi
  * Purpose: find a record by its ID.
  * Returns: index of the record in the array, or -1 if not found.
  */
@@ -171,6 +181,7 @@ int search_record(const record_t records[], int count, int id);
 
 /*
  * sort_records
+ * Author: Wally Elmardi
  * Purpose: sort the records into ascending order of ID (in place).
  */
 void sort_records(record_t records[], int count);
