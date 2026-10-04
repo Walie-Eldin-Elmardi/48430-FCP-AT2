@@ -37,7 +37,7 @@ Status save_records(const char *filename, const Record *head);
  * Adds a new record to the linked list.
  * Parameters: head (Record **), owner_id (int), shared_with_user_id (int), filename (const char *), size (long), path (const char *)
  * Returns: Status code indicating success or failure
- * Author: 
+ * Author: Minh
  */
 Status add_record(Record **head, int owner_id, int shared_with_user_id, const char *filename, long size, const char *path);
 /* 
