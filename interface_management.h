@@ -20,14 +20,14 @@ typedef struct User {
  * Loads users from a file into a linked list.
  * Parameters: filename of users database
  * Returns: Status code indicating success or failure
- * Author: Minh
+ * Author: Huy
  */
 Status load_users(const char *filename);
 /* 
  * Saves users from a linked list to a file.
  * Parameters: filename of user database to save users to, head of linked list of users
  * Returns: Status code indicating success or failure
- * Author: Minh
+ * Author: Huy
  */
 Status save_users(const char *filename);
 /* 
@@ -48,7 +48,7 @@ Status create_user();
  * Logs in a user.
  * Parameters: None
  * Returns: User structure if login is successful, otherwise NULL
- * Author: Minh
+ * Author: Huy
  */
 User login();
 
