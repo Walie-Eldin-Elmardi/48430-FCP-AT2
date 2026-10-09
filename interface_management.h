@@ -34,22 +34,22 @@ Status save_users(const char *filename);
  * Logs out the current user.
  * Parameters: current_user
  * Returns: Status code indicating success or failure
- * Author: Minh
+ * Author: Huy
  */
 Status logout(User *current_user);
 /* 
  * Creates a new user.
  * Parameters: None
  * Returns: Status code indicating success or failure
- * Author: Minh
+ * Author: Huy
  */
-Status create_user();
+Status create_user(void);
 /* 
  * Logs in a user.
  * Parameters: None
  * Returns: User structure if login is successful, otherwise NULL
  * Author: Huy
  */
-User login();
+User login(void);
 
 #endif
