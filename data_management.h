@@ -57,9 +57,9 @@ void sort_records(Record **head, SortOption sort_option);
 /* 
  * Searches for a record in the linked list.
  * Parameters: head (const Record *), user_id (int), filename (const char *)
- * Returns: Record structure if found, otherwise NULL
+ * Returns: Pointer to the record if found, otherwise NULL
  * Author: Georgia
  */
-Record search_record(const Record *head, int user_id, const char *filename);
+const Record *search_record(const Record *head, int user_id, const char *filename);
 
 #endif

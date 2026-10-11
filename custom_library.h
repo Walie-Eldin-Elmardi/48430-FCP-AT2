@@ -84,10 +84,14 @@ HuffmanNode *build_huffman_tree(const unsigned long freq[HUFFMAN_SYMBOLS]);
  */
 void generate_huffman_codes(HuffmanNode *root, HuffmanCode codes[HUFFMAN_SYMBOLS]);
 
-#ifdef DEBUG
-#define DEBUG_PRINT(fmt, ...) fprintf(stderr, "DEBUG: " fmt "\n", ##__VA_ARGS__)
-#else
-#define DEBUG_PRINT(fmt, ...) // No debug output in release mode
-#endif
+/*
+ * Prints a printf-style debug message to stderr when built with -DDEBUG.
+ * Does nothing in release builds. Use via DEBUG_PRINT("x = %d", x).
+ * Parameters: format string, followed by its arguments
+ * Returns: None
+ * Author: Wally
+ */
+void debug_print(const char *fmt, ...);
+#define DEBUG_PRINT debug_print
 
-#endif // CUSTOM_LIBRARY_H
+#endif /* CUSTOM_LIBRARY_H */

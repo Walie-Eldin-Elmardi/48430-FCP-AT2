@@ -43,13 +43,13 @@ Status logout(User *current_user);
  * Returns: Status code indicating success or failure
  * Author: Minh
  */
-Status create_user();
+Status create_user(void);
 /* 
  * Logs in a user.
  * Parameters: None
- * Returns: User structure if login is successful, otherwise NULL
+ * Returns: Pointer to the logged-in user if login is successful, otherwise NULL
  * Author: Minh
  */
-User login();
+User *login(void);
 
 #endif
