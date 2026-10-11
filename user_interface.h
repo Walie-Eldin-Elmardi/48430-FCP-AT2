@@ -10,13 +10,13 @@
  * Returns: None
  * Author: Georgia
  */
-void print_menu();
+void print_menu(void);
 /* 
  * Reads the user's choice from the console.
  * Parameters: None
  * Returns: None
  * Author: Georgia
  */
-void read_choice();
+void read_choice(void);
 
 #endif
