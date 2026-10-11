@@ -61,5 +61,13 @@ void sort_records(Record **head, SortOption sort_option);
  * Author: Georgia
  */
 const Record *search_record(const Record *head, int user_id, const char *filename);
+/*
+ * Frees every record in the linked list and sets the head to NULL.
+ * Records must have been allocated individually with malloc.
+ * Parameters: head (Record **)
+ * Returns: None
+ * Author: Georgia
+ */
+void free_records(Record **head);
 
 #endif
