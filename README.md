@@ -40,7 +40,7 @@ The code is compiled with `-Wall -Werror -ansi`, so it must be strict ANSI C (C8
 | `user_interface.c/.h` | `print_menu`, `read_choice` | Georgia |
 | `interface_management.c/.h` | `load_users`, `save_users`, `create_user`, `login`, `logout` | Minh |
 | `data_management.c/.h` | `load_records`, `save_records`, `add_record`, `display_records` | Minh |
-| | `sort_records`, `search_record` | Georgia |
+| | `sort_records`, `search_record`, `free_records` | Georgia |
 | `compression.c/.h` | `compress_file`, `decompress_file` | Wally |
 | `encryption.c/.h` | `derive_key`, `generate_nonce`, `encrypt_file`, `decrypt_file` | Wally |
 | `custom_library.c/.h` | Shared types (`Status`, Huffman structs), priority queue and Huffman tree helpers, `DEBUG_PRINT` | Wally |
@@ -62,4 +62,4 @@ Every function returns a `Status` code from `custom_library.h` where it can fail
 
 ## Status
 
-Work in progress. Headers are in place; implementations are being filled in per module. `sort_records` and `search_record` are implemented.
+Work in progress. Implemented: `main`, the menu, user accounts, records, sorting and searching. Still to do: compression and encryption.

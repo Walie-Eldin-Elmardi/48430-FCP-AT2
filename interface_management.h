@@ -44,11 +44,10 @@ Status logout(User *current_user);
  * Author: Huy
  */
 Status create_user(void);
-Status create_user(void);
-/* 
+/*
  * Logs in a user.
  * Parameters: None
- * Returns: User structure if login is successful, otherwise NULL
+ * Returns: User structure if login is successful, otherwise a User with id -1
  * Author: Huy
  */
 User login(void);
