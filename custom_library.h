@@ -83,6 +83,13 @@ HuffmanNode *build_huffman_tree(const unsigned long freq[HUFFMAN_SYMBOLS]);
  * Author: Wally
  */
 void generate_huffman_codes(HuffmanNode *root, HuffmanCode codes[HUFFMAN_SYMBOLS]);
+/*
+ * Frees every node in a Huffman tree.
+ * Parameters: root of the Huffman tree (may be NULL)
+ * Returns: None
+ * Author: Wally
+ */
+void free_huffman_tree(HuffmanNode *root);
 
 /*
  * Prints a printf-style debug message to stderr when built with -DDEBUG.
