@@ -144,12 +144,19 @@ void print_menu(const User *current_user) {
     /* Auditors can view records but not upload them */
     if (current_user->role != AUDITOR) {
         printf("1. Upload a file\n");
+        printf("2. Retrieve a file\n");
+        printf("3. Display records sorted by filename\n");
+        printf("4. Display records sorted by upload date\n");
+        printf("5. Search records by filename\n");
+        printf("6. Log out\n");
+        printf("0. Quit\n");
+        printf("Enter choice: ");
     }
-    printf("2. Retrieve a file\n");
-    printf("3. Display records sorted by filename\n");
-    printf("4. Display records sorted by upload date\n");
-    printf("5. Search records by filename\n");
-    printf("6. Log out\n");
+    printf("1. Retrieve a file\n");
+    printf("2. Display records sorted by filename\n");
+    printf("3. Display records sorted by upload date\n");
+    printf("4. Search records by filename\n");
+    printf("5. Log out\n");
     printf("0. Quit\n");
     printf("Enter choice: ");
 }
@@ -251,7 +258,6 @@ static void handle_retrieve(const Record *records, const User *current_user) {
 
     if (status == SUCCESS) {
         printf("Saved %s to %s.\n", filename, output_path);
-    } else {
         printf("Retrieve failed (error %d).\n", status);
     }
 }
