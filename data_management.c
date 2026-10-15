@@ -283,16 +283,28 @@ Status add_record(Record **head,
  *
  * Author: Huy
  ******************************************************************************/
-void display_records(const Record *head,
-                     int user_id,
-                     int numOfRecords)
+Record display_records(const Record *head,
+                       int user_id,
+                       SortOption sort_option,
+                       int numOfRecords)
 {
     const Record *current;
-
+    Record returned_record;
     int displayed;
 
     current = head;
     displayed = 0;
+
+    (void)sort_option;
+
+    returned_record.id = -1;
+    returned_record.owner_id = -1;
+    returned_record.shared_with_user_id = -1;
+    returned_record.filename[0] = '\0';
+    returned_record.size = 0;
+    returned_record.timestamp = 0;
+    returned_record.path[0] = '\0';
+    returned_record.next = NULL;
 
     printf("\nStored Documents\n");
     printf("ID\tFilename\tSize\tOwner\tShared With\n");
@@ -308,6 +320,12 @@ void display_records(const Record *head,
                    current->size,
                    current->owner_id,
                    current->shared_with_user_id);
+
+            if (displayed == 0)
+            {
+                returned_record = *current;
+                returned_record.next = NULL;
+            }
 
             displayed++;
 
@@ -325,4 +343,6 @@ void display_records(const Record *head,
     {
         printf("No documents found.\n");
     }
+
+    return returned_record;
 }
