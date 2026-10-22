@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include "custom_library.h"
 #include "data_management.h"
 #include "interface_management.h"
@@ -19,14 +21,16 @@ int main(void) {
     int running = 1;
     int exit_code = 0;
 
-    /* TODO(Minh): confirm load_users returns FILE_NOT_FOUND on first run */
+    /* Seed rand() once, for password salts and encryption nonces */
+    srand((unsigned int)time(NULL) ^ (unsigned int)clock());
+
+    /* FILE_NOT_FOUND is expected on the first run, before any users are saved */
     status = load_users(USERS_FILE);
     if (status != SUCCESS && status != FILE_NOT_FOUND) {
         fprintf(stderr, "Error: could not load users from %s\n", USERS_FILE);
         return 1;
     }
 
-    /* TODO(Minh): confirm load_records returns FILE_NOT_FOUND on first run */
     status = load_records(RECORDS_FILE, &records);
     if (status != SUCCESS && status != FILE_NOT_FOUND) {
         fprintf(stderr, "Error: could not load records from %s\n", RECORDS_FILE);

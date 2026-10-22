@@ -3,6 +3,10 @@
 
 #include "custom_library.h"
 
+/* Pass as user_id to display_records or search_record to match every
+ * record, whoever owns it. Real user IDs start at 1. Used for auditors. */
+#define ANY_USER 0
+
 typedef struct Record {
     int id; /* Unique identifier for the record */
     int owner_id; /* user ID of user who uploaded the file */
@@ -20,31 +24,32 @@ typedef enum {
 } SortOption;
 
 /* 
- * Loads records from a file into a linked list.
+ * Loads records from a file into a linked list. The list must start empty,
+ * and is left empty if the file is badly formatted.
  * Parameters: filename of records database, pointer to head of linked list
- * Returns: Status code indicating success or failure
- * Author: Minh
+ * Returns: SUCCESS, FILE_NOT_FOUND if the file does not exist yet, or another Status on failure
+ * Author: Minh (updated by Georgia)
  */
 Status load_records(const char *filename, Record **head);
 /* 
  * Saves records from a linked list to a file.
  * Parameters: filename (const char *), head (const Record *)
  * Returns: Status code indicating success or failure
- * Author: Minh
+ * Author: Minh (updated by Georgia)
  */
 Status save_records(const char *filename, const Record *head);
 /* 
  * Adds a new record to the linked list.
  * Parameters: head (Record **), owner_id (int), shared_with_user_id (int), filename (const char *), size (long), path (const char *)
  * Returns: Status code indicating success or failure
- * Author: Minh
+ * Author: Minh (updated by Georgia)
  */
 Status add_record(Record **head, int owner_id, int shared_with_user_id, const char *filename, long size, const char *path);
 /* 
- * Displays records from the linked list.
+ * Displays records owned by or shared with user_id (every record if ANY_USER).
  * Parameters: head (const Record *), user_id (int), sort_option (SortOption), numOfRecords (int)
  * Returns: Record structure containing the displayed records
- * Author: Minh
+ * Author: Minh (updated by Georgia)
  */
 Record display_records(const Record *head, int user_id, SortOption sort_option, int numOfRecords);
 /* 
@@ -55,7 +60,7 @@ Record display_records(const Record *head, int user_id, SortOption sort_option, 
  */
 void sort_records(Record **head, SortOption sort_option);
 /* 
- * Searches for a record in the linked list.
+ * Searches for a record owned by or shared with user_id (any record if ANY_USER).
  * Parameters: head (const Record *), user_id (int), filename (const char *)
  * Returns: Pointer to the record if found, otherwise NULL
  * Author: Georgia

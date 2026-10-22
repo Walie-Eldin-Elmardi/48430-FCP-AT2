@@ -17,38 +17,40 @@ typedef struct User {
     UserRole role; /* Role for the user */
 } User;
 /* 
- * Loads users from a file into a linked list.
+ * Loads users from a file into the users list.
  * Parameters: filename of users database
- * Returns: Status code indicating success or failure
- * Author: Huy
+ * Returns: SUCCESS, FILE_NOT_FOUND if the file does not exist yet, or another Status on failure
+ * Author: Huy (updated by Georgia)
  */
 Status load_users(const char *filename);
 /* 
- * Saves users from a linked list to a file.
- * Parameters: filename of user database to save users to, head of linked list of users
+ * Saves the users list to a file. Passwords are saved hashed, never in plain text.
+ * Parameters: filename of user database to save users to
  * Returns: Status code indicating success or failure
- * Author: Huy
+ * Author: Huy (updated by Georgia)
  */
 Status save_users(const char *filename);
 /* 
  * Logs out the current user.
  * Parameters: current_user
  * Returns: Status code indicating success or failure
- * Author: Huy
+ * Author: Huy (updated by Georgia)
  */
 Status logout(User *current_user);
 /* 
- * Creates a new user.
+ * Asks for a username, password and role and creates a new user with a
+ * hashed password. Reads each answer from its own line.
  * Parameters: None
  * Returns: Status code indicating success or failure
- * Author: Huy
+ * Author: Huy (updated by Georgia)
  */
 Status create_user(void);
 /*
- * Logs in a user.
+ * Asks for a username and password and logs in that user. Reads each
+ * answer from its own line.
  * Parameters: None
  * Returns: User structure if login is successful, otherwise a User with id -1
- * Author: Huy
+ * Author: Huy (updated by Georgia)
  */
 User login(void);
 
