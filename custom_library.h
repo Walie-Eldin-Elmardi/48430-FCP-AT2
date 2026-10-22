@@ -45,44 +45,51 @@ typedef struct {
  * Initializes a priority queue with the given capacity.
  * Parameters: maximum capacity of the priority queue
  * Returns: Pointer to the initialized PriorityQueue
- * Author: Wally
+ * Author: Wally (implemented by Georgia)
  */
 PriorityQueue *init_priority_queue(int capacity);
 /* 
  * Adds a node to the priority queue.
  * Parameters: priority queue pointer, node to add
  * Returns: Status indicating success or failure
- * Author: Wally
+ * Author: Wally (implemented by Georgia)
  */
 Status enqueue(PriorityQueue *pq, HuffmanNode *node);
 /* 
  * Removes the highest-priority node from the priority queue.
  * Parameters: priority queue pointer
  * Returns: Pointer to the removed node
- * Author: Wally
+ * Author: Wally (implemented by Georgia)
  */
 HuffmanNode *dequeue(PriorityQueue *pq);
 /* 
  * Counts the frequency of each symbol in the input data.
  * Parameters: data pointer, size of data, frequency array
  * Returns: None
- * Author: Wally
+ * Author: Wally (implemented by Georgia)
  */
 void count_freq(const unsigned char *data, long size, unsigned long freq[HUFFMAN_SYMBOLS]);
 /* 
  * Builds the Huffman tree based on symbol frequencies.
  * Parameters: frequency array
  * Returns: Pointer to the root of the Huffman tree
- * Author: Wally
+ * Author: Wally (implemented by Georgia)
  */
 HuffmanNode *build_huffman_tree(const unsigned long freq[HUFFMAN_SYMBOLS]);
 /* 
  * Generates Huffman codes for each symbol in the tree.
  * Parameters: root of the Huffman tree, array to store Huffman codes
  * Returns: None
- * Author: Wally
+ * Author: Wally (implemented by Georgia)
  */
 void generate_huffman_codes(HuffmanNode *root, HuffmanCode codes[HUFFMAN_SYMBOLS]);
+/*
+ * Frees every node in a Huffman tree.
+ * Parameters: root of the Huffman tree (may be NULL)
+ * Returns: None
+ * Author: Georgia
+ */
+void free_huffman_tree(HuffmanNode *root);
 
 /*
  * Prints a printf-style debug message to stderr when built with -DDEBUG.

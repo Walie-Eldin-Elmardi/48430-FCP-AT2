@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include "user_interface.h"
 #include "compression.h"
 #include "encryption.h"
@@ -11,8 +12,7 @@
 static User logged_in_user;
 
 /*
- * Discards everything left on the current line of stdin. Needed after
- * login and create_user, which read with scanf and leave the newline behind.
+ * Discards everything left on the current line of stdin.
  * Parameters: None
  * Returns: None
  * Author: Georgia
@@ -71,11 +71,13 @@ static int prompt_line(const char *prompt, char *buffer, int size) {
  */
 static int prompt_int(const char *prompt, int *value) {
     char buffer[INPUT_LENGTH];
+    char extra;
 
     if (!prompt_line(prompt, buffer, sizeof(buffer))) {
         return 0;
     }
-    if (sscanf(buffer, "%d", value) != 1) {
+    /* Reading one more character catches trailing junk such as "3abc" */
+    if (sscanf(buffer, "%d %c", value, &extra) != 1) {
         printf("Please enter a number.\n");
         return 0;
     }
@@ -91,6 +93,22 @@ static int prompt_int(const char *prompt, int *value) {
 static const char *base_name(const char *path) {
     const char *slash = strrchr(path, '/');
     return (slash != NULL) ? slash + 1 : path;
+}
+
+/*
+ * Checks whether a string contains any whitespace. Filenames and paths are
+ * saved to the records file separated by spaces, so they cannot contain any.
+ * Parameters: string to check
+ * Returns: 1 if the string contains whitespace, otherwise 0
+ * Author: Georgia
+ */
+static int has_whitespace(const char *str) {
+    for (; *str != '\0'; str++) {
+        if (isspace((unsigned char)*str)) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 /*
@@ -113,6 +131,36 @@ static long file_size(const char *filename) {
 }
 
 /*
+ * Returns a message describing a status code, for error output.
+ * Parameters: status
+ * Returns: Description of the status
+ * Author: Georgia
+ */
+static const char *status_message(Status status) {
+    switch (status) {
+        case SUCCESS: return "success";
+        case FILE_NOT_FOUND: return "file could not be opened";
+        case MEMORY_ALLOCATION_FAILED: return "out of memory";
+        case INVALID_ARGUMENT: return "invalid input";
+        case RECORD_NOT_FOUND: return "record not found";
+        case INVALID_AUTHENTICATION: return "wrong password";
+    }
+    return "unknown error";
+}
+
+/*
+ * Gets the user ID to search records with. Auditors can see every
+ * record; everyone else only sees records they own or that are shared
+ * with them.
+ * Parameters: current_user
+ * Returns: ANY_USER for auditors, otherwise the user's ID
+ * Author: Georgia
+ */
+static int visible_user_id(const User *current_user) {
+    return (current_user->role == AUDITOR) ? ANY_USER : current_user->id;
+}
+
+/*
  * Returns a printable name for a user role.
  * Parameters: role
  * Returns: Name of the role, or "Unknown" if the role is not recognised
@@ -128,6 +176,8 @@ static const char *role_name(UserRole role) {
 }
 
 void print_menu(const User *current_user) {
+    int option = 1;
+
     printf("\n");
 
     if (current_user == NULL) {
@@ -141,22 +191,16 @@ void print_menu(const User *current_user) {
     printf("Logged in as %s (%s)\n", current_user->username,
            role_name(current_user->role));
 
-    /* Auditors can view records but not upload them */
+    /* Auditors can view records but not upload them, so their options are
+     * numbered from 1 without the upload option (see read_choice) */
     if (current_user->role != AUDITOR) {
-        printf("1. Upload a file\n");
-        printf("2. Retrieve a file\n");
-        printf("3. Display records sorted by filename\n");
-        printf("4. Display records sorted by upload date\n");
-        printf("5. Search records by filename\n");
-        printf("6. Log out\n");
-        printf("0. Quit\n");
-        printf("Enter choice: ");
+        printf("%d. Upload a file\n", option++);
     }
-    printf("1. Retrieve a file\n");
-    printf("2. Display records sorted by filename\n");
-    printf("3. Display records sorted by upload date\n");
-    printf("4. Search records by filename\n");
-    printf("5. Log out\n");
+    printf("%d. Retrieve a file\n", option++);
+    printf("%d. Display records sorted by filename\n", option++);
+    printf("%d. Display records sorted by upload date\n", option++);
+    printf("%d. Search records by filename\n", option++);
+    printf("%d. Log out\n", option);
     printf("0. Quit\n");
     printf("Enter choice: ");
 }
@@ -185,22 +229,34 @@ static void handle_upload(Record **records, const User *current_user) {
         printf("Could not open %s.\n", input_path);
         return;
     }
-    if (!prompt_int("User ID to share with: ", &shared_with_user_id)) {
-        return;
-    }
-    if (!prompt_line("Password for this file: ", password, sizeof(password))) {
-        return;
-    }
-
     filename = base_name(input_path);
+    if (filename[0] == '\0') {
+        printf("Please give the path of a file, not a directory.\n");
+        return;
+    }
     if (strlen(filename) >= MAX_FILENAME_LENGTH) {
         printf("Filename is too long.\n");
+        return;
+    }
+    if (has_whitespace(filename)) {
+        printf("Filenames cannot contain spaces.\n");
         return;
     }
     if (search_record(*records, current_user->id, filename) != NULL) {
         printf("You already have a file called %s.\n", filename);
         return;
     }
+    if (!prompt_int("User ID to share with: ", &shared_with_user_id)) {
+        return;
+    }
+    if (shared_with_user_id <= 0) {
+        printf("User ID must be a positive number.\n");
+        return;
+    }
+    if (!prompt_line("Password for this file: ", password, sizeof(password))) {
+        return;
+    }
+
     sprintf(stored_path, "%d_%.*s.enc", current_user->id,
             MAX_PATH_LENGTH - 20, filename);
 
@@ -217,7 +273,7 @@ static void handle_upload(Record **records, const User *current_user) {
     if (status == SUCCESS) {
         printf("Uploaded %s.\n", filename);
     } else {
-        printf("Upload failed (error %d).\n", status);
+        printf("Upload failed: %s.\n", status_message(status));
     }
 }
 
@@ -238,7 +294,7 @@ static void handle_retrieve(const Record *records, const User *current_user) {
     if (!prompt_line("Filename to retrieve: ", filename, sizeof(filename))) {
         return;
     }
-    record = search_record(records, current_user->id, filename);
+    record = search_record(records, visible_user_id(current_user), filename);
     if (record == NULL) {
         printf("No file called %s is shared with you.\n", filename);
         return;
@@ -258,7 +314,8 @@ static void handle_retrieve(const Record *records, const User *current_user) {
 
     if (status == SUCCESS) {
         printf("Saved %s to %s.\n", filename, output_path);
-        printf("Retrieve failed (error %d).\n", status);
+    } else {
+        printf("Retrieve failed: %s.\n", status_message(status));
     }
 }
 
@@ -276,7 +333,7 @@ static void handle_search(const Record *records, const User *current_user) {
     if (!prompt_line("Filename to search for: ", filename, sizeof(filename))) {
         return;
     }
-    record = search_record(records, current_user->id, filename);
+    record = search_record(records, visible_user_id(current_user), filename);
     if (record == NULL) {
         printf("No file called %s is shared with you.\n", filename);
         return;
@@ -307,7 +364,6 @@ int read_choice(Record **records, User **current_user) {
         switch (choice) {
             case 1:
                 logged_in_user = login();
-                discard_line();
                 if (logged_in_user.id != -1) {
                     *current_user = &logged_in_user;
                 }
@@ -316,7 +372,6 @@ int read_choice(Record **records, User **current_user) {
                 if (create_user() != SUCCESS) {
                     printf("Could not create account.\n");
                 }
-                discard_line();
                 break;
             default:
                 printf("Invalid choice.\n");
@@ -324,13 +379,15 @@ int read_choice(Record **records, User **current_user) {
         return 1;
     }
 
+    /* The auditor menu has no upload option, so shift their choice up by
+     * one to line it up with the options below */
+    if ((*current_user)->role == AUDITOR) {
+        choice++;
+    }
+
     switch (choice) {
         case 1:
-            if ((*current_user)->role == AUDITOR) {
-                printf("Auditors cannot upload files.\n");
-            } else {
-                handle_upload(records, *current_user);
-            }
+            handle_upload(records, *current_user);
             break;
         case 2:
             handle_retrieve(*records, *current_user);
@@ -338,7 +395,7 @@ int read_choice(Record **records, User **current_user) {
         case 3:
         case 4:
             sort_records(records, (choice == 3) ? SORT_BY_NAME : SORT_BY_DATE);
-            display_records(*records, (*current_user)->id,
+            display_records(*records, visible_user_id(*current_user),
                             (choice == 3) ? SORT_BY_NAME : SORT_BY_DATE,
                             0);
             break;

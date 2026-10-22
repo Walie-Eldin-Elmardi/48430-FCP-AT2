@@ -8,15 +8,16 @@
  * and write the header to the output file, followed by the compressed data.
  * Parameters: input filename, output filename
  * Returns: This function returns a status code indicating success or failure
- * Author: Wally
+ * Author: Wally (implemented by Georgia)
  */
 Status compress_file(const char *input_filename, const char *output_filename);
 /* 
  * This function exists to read in a compressed file, decompress it using Huffman coding
  * and write the decompressed data to the output file.
  * Parameters: input filename, output filename
+ * If decompressing fails, no output file is left behind.
  * Returns: This function returns a status code indicating success or failure
- * Author: Wally
+ * Author: Wally (implemented by Georgia)
  */
 Status decompress_file(const char *input_filename, const char *output_filename);
 

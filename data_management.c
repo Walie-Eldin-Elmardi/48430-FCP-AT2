@@ -3,7 +3,7 @@
  * Assessment Task 3 - Group Project
  *
  * File: data_management.c
- * Author: Huy
+ * Authors: Huy, Georgia
  *
  * This file contains functions used to manage document records.
  ******************************************************************************/
@@ -19,7 +19,7 @@
 /******************************************************************************
  * Loads records from the records database into a linked list.
  *
- * Author: Huy
+ * Author: Huy (status codes: Georgia)
  ******************************************************************************/
 Status load_records(const char *filename,
                     Record **head)
@@ -41,16 +41,16 @@ Status load_records(const char *filename,
     char document_name[INPUT_BUFFER_SIZE];
     char path[INPUT_BUFFER_SIZE];
 
-    if (head == NULL || *head != NULL)
+    if (filename == NULL || head == NULL || *head != NULL)
     {
-        return 1;
+        return INVALID_ARGUMENT;
     }
 
     file = fopen(filename, "r");
 
     if (file == NULL)
     {
-        return 1;
+        return FILE_NOT_FOUND;
     }
 
     while (1)
@@ -70,17 +70,13 @@ Status load_records(const char *filename,
             break;
         }
 
-        if (result != 7)
-        {
-            fclose(file);
-            return 1;
-        }
-
-        if (strlen(document_name) >= MAX_FILENAME_LENGTH ||
+        if (result != 7 ||
+            strlen(document_name) >= MAX_FILENAME_LENGTH ||
             strlen(path) >= MAX_PATH_LENGTH)
         {
             fclose(file);
-            return 1;
+            free_records(head);
+            return INVALID_ARGUMENT;
         }
 
         new_record = (Record *)malloc(sizeof(Record));
@@ -88,7 +84,8 @@ Status load_records(const char *filename,
         if (new_record == NULL)
         {
             fclose(file);
-            return 1;
+            free_records(head);
+            return MEMORY_ALLOCATION_FAILED;
         }
 
         new_record->id = id;
@@ -123,13 +120,13 @@ Status load_records(const char *filename,
 
     fclose(file);
 
-    return 0;
+    return SUCCESS;
 }
 
 /******************************************************************************
  * Saves all records from the linked list to the database.
  *
- * Author: Huy
+ * Author: Huy (status codes: Georgia)
  ******************************************************************************/
 Status save_records(const char *filename,
                     const Record *head)
@@ -138,11 +135,16 @@ Status save_records(const char *filename,
 
     const Record *current;
 
+    if (filename == NULL)
+    {
+        return INVALID_ARGUMENT;
+    }
+
     file = fopen(filename, "w");
 
     if (file == NULL)
     {
-        return 1;
+        return FILE_NOT_FOUND;
     }
 
     current = head;
@@ -160,7 +162,7 @@ Status save_records(const char *filename,
                     current->path) < 0)
         {
             fclose(file);
-            return 1;
+            return FILE_NOT_FOUND;
         }
 
         current = current->next;
@@ -168,16 +170,16 @@ Status save_records(const char *filename,
 
     if (fclose(file) != 0)
     {
-        return 1;
+        return FILE_NOT_FOUND;
     }
 
-    return 0;
+    return SUCCESS;
 }
 
 /******************************************************************************
  * Adds a new document record to the linked list.
  *
- * Author: Huy
+ * Author: Huy (status codes: Georgia)
  ******************************************************************************/
 Status add_record(Record **head,
                   int owner_id,
@@ -196,26 +198,26 @@ Status add_record(Record **head,
         filename == NULL ||
         path == NULL)
     {
-        return 1;
+        return INVALID_ARGUMENT;
     }
 
     if (owner_id <= 0 ||
         shared_with_user_id <= 0 ||
         size < 0)
     {
-        return 1;
+        return INVALID_ARGUMENT;
     }
 
     if (strlen(filename) == 0 ||
         strlen(filename) >= MAX_FILENAME_LENGTH)
     {
-        return 1;
+        return INVALID_ARGUMENT;
     }
 
     if (strlen(path) == 0 ||
         strlen(path) >= MAX_PATH_LENGTH)
     {
-        return 1;
+        return INVALID_ARGUMENT;
     }
 
     next_id = 1;
@@ -242,7 +244,7 @@ Status add_record(Record **head,
 
     if (new_record == NULL)
     {
-        return 1;
+        return MEMORY_ALLOCATION_FAILED;
     }
 
     new_record->id = next_id;
@@ -275,13 +277,14 @@ Status add_record(Record **head,
         current->next = new_record;
     }
 
-    return 0;
+    return SUCCESS;
 }
 
 /******************************************************************************
- * Displays records owned by or shared with the current user.
+ * Displays records owned by or shared with the current user, or every
+ * record if user_id is ANY_USER.
  *
- * Author: Huy
+ * Author: Huy (auditor access: Georgia)
  ******************************************************************************/
 Record display_records(const Record *head,
                        int user_id,
@@ -311,7 +314,8 @@ Record display_records(const Record *head,
 
     while (current != NULL)
     {
-        if (current->owner_id == user_id ||
+        if (user_id == ANY_USER ||
+            current->owner_id == user_id ||
             current->shared_with_user_id == user_id)
         {
             printf("%d\t%s\t%ld\t%d\t%d\n",
@@ -433,7 +437,8 @@ const Record *search_record(const Record *head, int user_id, const char *filenam
     }
 
     for (current = head; current != NULL; current = current->next) {
-        if ((current->owner_id == user_id || current->shared_with_user_id == user_id)
+        if ((user_id == ANY_USER || current->owner_id == user_id ||
+             current->shared_with_user_id == user_id)
             && strcmp(current->filename, filename) == 0) {
             return current;
         }
