@@ -2,14 +2,14 @@
 
 Group project for 48430 Fundamentals of C Programming (Assessment Task 3), Team 31, Thursday 4pm lab.
 
-A command-line C program that lets accountants and their clients share sensitive documents (bank statements, payroll records, ID documents, etc.) securely. Files are compressed with Huffman coding and encrypted with ChaCha before they are stored, and only the users a file is shared with can retrieve it.
+A command-line C program that lets accountants and their clients share sensitive documents (bank statements, payroll records, ID documents, etc.) securely. Files are compressed with Huffman coding and encrypted with ChaCha20 before they are stored, and only the users a file is shared with can retrieve it.
 
 ## Team
 
 | Name | Responsible for |
 |---|---|
-| Wally Elmardi | Compression, encryption, Huffman helpers |
-| Georgia Gamble | `main`, user interface (menu), sorting and searching records, password hashing, auditor access, status codes, Huffman compression, ChaCha20 encryption |
+| Wally Elmardi | Compression and encryption design (header prototypes), shared types, `DEBUG_PRINT` |
+| Georgia Gamble | `main`, user interface (menu), sorting and searching records, Huffman compression and helpers, ChaCha20 encryption, password hashing, auditor access, status codes and input handling in the user and record functions |
 | Minh Huy Pham | User accounts, loading/saving/adding/displaying records |
 
 ## Building and running
