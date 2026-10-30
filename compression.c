@@ -1,19 +1,26 @@
 /*
- * Huffman compression: each byte value gets a bit code whose length depends
- * on how often it appears, so common bytes take fewer bits.
- * Author: Georgia
- */
-#include <stdio.h>
-#include <stdlib.h>
-#include "compression.h"
-
-/*
+ * 48430 Fundamentals of C Programming - Assessment Task 3, Team 31
+ * File: compression.c
+ * Authors: Wally (design), Georgia
+ *
+ * Huffman compression: each byte value gets a bit code whose length
+ * depends on how often it appears, so common bytes take fewer bits.
+ *
  * Compressed file layout:
  *   4 bytes   original file size
  *   256 x 4   frequency of each byte value (used to rebuild the tree)
  *   rest      Huffman codes packed into bytes, most significant bit first
- * All numbers are stored little-endian so the format is the same on any machine.
+ * All numbers are stored little-endian so the format is the same on any
+ * machine.
  */
+#include <stdio.h>  /* fopen, fclose, fseek, ftell, fread, fgetc, fputc,
+                       ferror, remove */
+#include <stdlib.h> /* malloc, free */
+#include "compression.h"
+
+#define BITS_PER_BYTE 8
+/* The header holds the file size and one frequency per byte value */
+#define HEADER_LENGTH (4 + 4 * HUFFMAN_SYMBOLS)
 
 /*
  * Writes a 32-bit number to a file as 4 little-endian bytes.
@@ -55,11 +62,13 @@ static int read_u32(FILE *fp, unsigned long *value) {
 
 /*
  * Reads a whole file into memory.
- * Parameters: filename, pointer to store the buffer, pointer to store the size
- * Returns: Status code indicating success or failure
+ * Parameters: filename, pointer to store the buffer, pointer to store the
+ *             size in bytes
+ * Returns: SUCCESS, or a status code saying why it failed
  * Author: Georgia
  */
-static Status read_whole_file(const char *filename, unsigned char **data, long *size) {
+static status_t read_whole_file(const char *filename, unsigned char **data,
+                                long *size) {
     FILE *fp = fopen(filename, "rb");
 
     if (fp == NULL) {
@@ -86,18 +95,48 @@ static Status read_whole_file(const char *filename, unsigned char **data, long *
     return SUCCESS;
 }
 
-Status compress_file(const char *input_filename, const char *output_filename) {
-    unsigned long freq[HUFFMAN_SYMBOLS];
-    HuffmanCode *codes;
-    HuffmanNode *root;
-    unsigned char *data;
+/*
+ * Writes the data as packed Huffman codes, padding the last byte with
+ * zeros.
+ * Parameters: output file, data, size of data, code for each byte value
+ * Returns: None (write errors are picked up with ferror by the caller)
+ * Author: Georgia
+ */
+static void write_codes(FILE *out, const unsigned char *data, long size,
+                        const huffman_code_t codes[HUFFMAN_SYMBOLS]) {
+    const huffman_code_t *code;
     unsigned char current = 0;
     int bit_count = 0;
-    long size;
     long i;
     int j;
+
+    for (i = 0; i < size; i++) {
+        code = &codes[data[i]];
+        for (j = 0; j < code->length; j++) {
+            current = (unsigned char)((current << 1) | (code->bits[j] == '1'));
+            if (++bit_count == BITS_PER_BYTE) {
+                fputc(current, out);
+                current = 0;
+                bit_count = 0;
+            }
+        }
+    }
+    if (bit_count > 0) {
+        fputc(current << (BITS_PER_BYTE - bit_count), out);
+    }
+}
+
+status_t compress_file(const char *input_filename,
+                       const char *output_filename) {
+    unsigned long freq[HUFFMAN_SYMBOLS];
+    huffman_code_t *codes;
+    huffman_node_t *root;
+    unsigned char *data;
+    long size;
+    long compressed_size;
+    int i;
     FILE *out;
-    Status status;
+    status_t status;
 
     if (input_filename == NULL || output_filename == NULL) {
         return INVALID_ARGUMENT;
@@ -107,7 +146,8 @@ Status compress_file(const char *input_filename, const char *output_filename) {
     if (status != SUCCESS) {
         return status;
     }
-    /* The header stores the size in 4 bytes, so larger files cannot be compressed */
+    /* The header stores the size in 4 bytes, so larger files cannot be
+     * compressed */
     if ((unsigned long)size > 0xFFFFFFFFUL) {
         free(data);
         return INVALID_ARGUMENT;
@@ -120,70 +160,89 @@ Status compress_file(const char *input_filename, const char *output_filename) {
         return MEMORY_ALLOCATION_FAILED;
     }
 
-    /* 256 codes of 256 chars each is too big for the stack on some systems */
-    codes = malloc(HUFFMAN_SYMBOLS * sizeof(HuffmanCode));
+    /* 256 codes of 256 chars each is too big for the stack on some
+     * systems */
+    codes = malloc(HUFFMAN_SYMBOLS * sizeof(huffman_code_t));
     if (codes == NULL) {
         free_huffman_tree(root);
         free(data);
         return MEMORY_ALLOCATION_FAILED;
     }
-    generate_huffman_codes(root, codes);
+    status = generate_huffman_codes(root, codes);
+    free_huffman_tree(root);
+    if (status != SUCCESS) {
+        free(codes);
+        free(data);
+        return status;
+    }
 
     out = fopen(output_filename, "wb");
     if (out == NULL) {
         free(codes);
-        free_huffman_tree(root);
         free(data);
         return FILE_NOT_FOUND;
     }
 
     write_u32(out, (unsigned long)size);
-    for (j = 0; j < HUFFMAN_SYMBOLS; j++) {
-        write_u32(out, freq[j]);
+    for (i = 0; i < HUFFMAN_SYMBOLS; i++) {
+        write_u32(out, freq[i]);
     }
+    write_codes(out, data, size, codes);
 
-    for (i = 0; i < size; i++) {
-        const HuffmanCode *code = &codes[data[i]];
-
-        for (j = 0; j < code->length; j++) {
-            current = (unsigned char)((current << 1) | (code->bits[j] == '1'));
-            if (++bit_count == 8) {
-                fputc(current, out);
-                current = 0;
-                bit_count = 0;
-            }
-        }
-    }
-    /* Pad the last byte with zeros */
-    if (bit_count > 0) {
-        fputc(current << (8 - bit_count), out);
-    }
-
+    compressed_size = ftell(out);
     status = ferror(out) ? FILE_NOT_FOUND : SUCCESS;
     if (fclose(out) != 0) {
         status = FILE_NOT_FOUND;
     }
+    if (status != SUCCESS) {
+        remove(output_filename);
+    }
     free(codes);
-    free_huffman_tree(root);
     free(data);
 
-    DEBUG_PRINT("compressed %s (%ld bytes) to %s", input_filename, size, output_filename);
+    DEBUG_PRINT("compressed %s (%ld bytes) to %s (%ld bytes, %d of header)",
+                input_filename, size, output_filename, compressed_size,
+                HEADER_LENGTH);
     return status;
 }
 
-Status decompress_file(const char *input_filename, const char *output_filename) {
+/*
+ * Reads the header of a compressed file and checks it is consistent.
+ * Parameters: file, pointer to store the original size, frequency array
+ * Returns: 1 if the header is valid, otherwise 0
+ * Author: Georgia
+ */
+static int read_header(FILE *in, unsigned long *size,
+                       unsigned long freq[HUFFMAN_SYMBOLS]) {
+    unsigned long total = 0;
+    int i;
+
+    if (!read_u32(in, size)) {
+        return 0;
+    }
+    for (i = 0; i < HUFFMAN_SYMBOLS; i++) {
+        if (!read_u32(in, &freq[i])) {
+            return 0;
+        }
+        total += freq[i];
+    }
+    /* The frequencies must add up to the file size, or this isn't our
+     * format */
+    return total == *size;
+}
+
+status_t decompress_file(const char *input_filename,
+                         const char *output_filename) {
     unsigned long freq[HUFFMAN_SYMBOLS];
     unsigned long size;
-    unsigned long total = 0;
     unsigned long written = 0;
-    const HuffmanNode *node;
-    HuffmanNode *root;
+    const huffman_node_t *node;
+    huffman_node_t *root;
     FILE *in;
     FILE *out;
     int c = 0;
     int bit = -1;
-    int i;
-    Status status = SUCCESS;
+    status_t status = SUCCESS;
 
     if (input_filename == NULL || output_filename == NULL) {
         return INVALID_ARGUMENT;
@@ -193,20 +252,9 @@ Status decompress_file(const char *input_filename, const char *output_filename) 
     if (in == NULL) {
         return FILE_NOT_FOUND;
     }
-
-    if (!read_u32(in, &size)) {
-        fclose(in);
-        return INVALID_ARGUMENT;
-    }
-    for (i = 0; i < HUFFMAN_SYMBOLS; i++) {
-        if (!read_u32(in, &freq[i])) {
-            fclose(in);
-            return INVALID_ARGUMENT;
-        }
-        total += freq[i];
-    }
-    /* The frequencies must add up to the file size, or this isn't our format */
-    if (total != size) {
+    if (!read_header(in, &size, freq)) {
+        DEBUG_PRINT("%s does not have a valid compressed header",
+                    input_filename);
         fclose(in);
         return INVALID_ARGUMENT;
     }
@@ -224,16 +272,19 @@ Status decompress_file(const char *input_filename, const char *output_filename) 
         return FILE_NOT_FOUND;
     }
 
-    /* Follow bits down the tree from the root; each leaf is one output byte */
+    /* Follow bits down the tree from the root; each leaf is one output
+     * byte */
     node = root;
     while (written < size) {
         if (bit < 0) {
             c = fgetc(in);
             if (c == EOF) {
+                DEBUG_PRINT("%s ended after %lu of %lu bytes",
+                            input_filename, written, size);
                 status = INVALID_ARGUMENT;
                 break;
             }
-            bit = 7;
+            bit = BITS_PER_BYTE - 1;
         }
         node = ((c >> bit) & 1) ? node->right : node->left;
         bit--;
@@ -263,6 +314,7 @@ Status decompress_file(const char *input_filename, const char *output_filename) 
         remove(output_filename);
     }
 
-    DEBUG_PRINT("decompressed %s to %s (%lu bytes)", input_filename, output_filename, written);
+    DEBUG_PRINT("decompressed %s to %s (%lu bytes)", input_filename,
+                output_filename, written);
     return status;
 }

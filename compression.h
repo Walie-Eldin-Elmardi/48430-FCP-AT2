@@ -1,24 +1,35 @@
+/*
+ * 48430 Fundamentals of C Programming - Assessment Task 3, Team 31
+ * File: compression.h
+ * Authors: Wally (design), Georgia
+ *
+ * Compresses and decompresses whole files with Huffman coding.
+ */
 #ifndef COMPRESSION_H
 #define COMPRESSION_H
 
 #include "custom_library.h"
 
-/* 
- * This function exists to read in a file, compress it using Huffman coding
- * and write the header to the output file, followed by the compressed data.
+/*
+ * Reads a file, compresses it with Huffman coding, and writes a header
+ * followed by the compressed data to the output file. If compressing
+ * fails, no output file is left behind.
  * Parameters: input filename, output filename
- * Returns: This function returns a status code indicating success or failure
+ * Returns: SUCCESS, or a status code saying why it failed
  * Author: Wally (implemented by Georgia)
  */
-Status compress_file(const char *input_filename, const char *output_filename);
-/* 
- * This function exists to read in a compressed file, decompress it using Huffman coding
- * and write the decompressed data to the output file.
+status_t compress_file(const char *input_filename,
+                       const char *output_filename);
+/*
+ * Reads a file written by compress_file, decompresses it, and writes the
+ * original data to the output file. If decompressing fails, no output
+ * file is left behind.
  * Parameters: input filename, output filename
- * If decompressing fails, no output file is left behind.
- * Returns: This function returns a status code indicating success or failure
+ * Returns: SUCCESS, INVALID_ARGUMENT if the input is not a compressed
+ *          file, or another status code saying why it failed
  * Author: Wally (implemented by Georgia)
  */
-Status decompress_file(const char *input_filename, const char *output_filename);
+status_t decompress_file(const char *input_filename,
+                         const char *output_filename);
 
-#endif
+#endif /* COMPRESSION_H */
