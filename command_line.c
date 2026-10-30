@@ -5,7 +5,7 @@
  *
  * Runs the program in one of its command line modes. See command_line.h.
  */
-#include <stdio.h>  /* printf, fprintf */
+#include <stdio.h>  /* printf, fprintf, fopen, fclose */
 #include <string.h> /* strcmp, memset */
 #include "command_line.h"
 #include "custom_library.h"
@@ -87,6 +87,22 @@ static const option_t *find_option(const char *flag) {
         }
     }
     return NULL;
+}
+
+/*
+ * Checks whether a file exists (can be opened for reading).
+ * Parameters: filename
+ * Returns: 1 if it exists, otherwise 0
+ * Author: Georgia
+ */
+static int file_exists(const char *filename) {
+    FILE *fp = fopen(filename, "rb");
+
+    if (fp == NULL) {
+        return 0;
+    }
+    fclose(fp);
+    return 1;
 }
 
 /*
@@ -178,6 +194,14 @@ int run_command_line(int argc, char *argv[]) {
     /* Writing the output would wipe the input before it was read */
     if (strcmp(argv[2], argv[3]) == 0) {
         fprintf(stderr, "The input and output files must be different.\n");
+        return 1;
+    }
+    /* Also catches the same file named two ways, such as a.txt and
+     * ./a.txt, which ANSI C has no way to compare */
+    if (file_exists(argv[3]) &&
+        !prompt_yes_no("The output file already exists. Overwrite it? "
+                       "(y/n): ")) {
+        fprintf(stderr, "Cancelled.\n");
         return 1;
     }
 

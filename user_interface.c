@@ -8,14 +8,19 @@
  */
 #include <stdio.h>  /* printf, fopen, fclose, fgetc, ferror, fseek, ftell,
                        sprintf, remove */
-#include <string.h> /* strrchr, strlen, strcmp, memset */
+#include <string.h> /* strrchr, strlen, strcmp, strcpy, memset */
 #include "user_interface.h"
 #include "input.h"
 #include "compression.h"
 #include "encryption.h"
 
-/* Holds the compressed file between compressing and encrypting it */
+/* Holds the compressed file between compressing and encrypting it. If a
+ * file of this name already exists, a number is added (transfer1.tmp,
+ * transfer2.tmp, ...) so that file is never overwritten. */
 #define TEMP_FILE "transfer.tmp"
+#define TEMP_FILE_NUMBERED "transfer%d.tmp"
+#define MAX_TEMP_FILES 100
+#define TEMP_NAME_LENGTH 32
 
 /* Options on the menu shown when nobody is logged in */
 typedef enum {
@@ -146,8 +151,8 @@ static int has_uploaded(const record_t *records, int owner_id,
 
 /*
  * Checks that retrieving a file to this path will not overwrite one of
- * the program's own files: the users file, the records file, the
- * temporary file, or a stored encrypted file. Only the filename part is
+ * the program's own files: the users file, the records file, or a stored
+ * encrypted file. Only the filename part is
  * compared, so "./1_notes.txt.enc" is caught too.
  * Parameters: records list, path the user wants to save to
  * Returns: 1 if the path is safe to write, otherwise 0
@@ -164,8 +169,7 @@ static int is_safe_output_path(const record_t *records, const char *path) {
     }
 
     reserved = strcmp(name, USERS_FILE) == 0 ||
-               strcmp(name, RECORDS_FILE) == 0 ||
-               strcmp(name, TEMP_FILE) == 0;
+               strcmp(name, RECORDS_FILE) == 0;
     for (current = records; current != NULL && !reserved;
          current = current->next) {
         reserved = strcmp(name, base_name(current->path)) == 0;
@@ -193,6 +197,33 @@ static int file_exists(const char *filename) {
     }
     fclose(fp);
     return 1;
+}
+
+/*
+ * Picks a name for the temporary file that no existing file has, so
+ * writing and then deleting it cannot destroy anyone's file.
+ * Parameters: buffer to store the name, path the temporary file must not
+ *             share a filename with (NULL if none)
+ * Returns: 1 if a free name was found, otherwise 0
+ * Author: Georgia
+ */
+static int pick_temp_file(char name[TEMP_NAME_LENGTH], const char *avoid) {
+    int i;
+
+    for (i = 0; i < MAX_TEMP_FILES; i++) {
+        if (i == 0) {
+            strcpy(name, TEMP_FILE);
+        } else {
+            sprintf(name, TEMP_FILE_NUMBERED, i);
+        }
+        if (!file_exists(name) &&
+            (avoid == NULL || strcmp(base_name(avoid), name) != 0)) {
+            DEBUG_PRINT("using temporary file %s", name);
+            return 1;
+        }
+    }
+    printf("Could not find a free name for a temporary file.\n");
+    return 0;
 }
 
 /*
@@ -275,6 +306,7 @@ static void handle_upload(record_t **records, const user_list_t *users,
                           const user_t *current_user) {
     char input_path[MAX_PATH_LENGTH];
     char stored_path[MAX_PATH_LENGTH];
+    char temp_file[TEMP_NAME_LENGTH];
     char username[INPUT_LENGTH];
     char password[INPUT_LENGTH];
     const char *filename;
@@ -326,16 +358,24 @@ static void handle_upload(record_t **records, const user_list_t *users,
     }
 
     sprintf(stored_path, "%d_%s.enc", current_user->id, filename);
-
-    status = compress_file(input_path, TEMP_FILE);
-    if (status == SUCCESS) {
-        status = encrypt_file(TEMP_FILE, stored_path, password);
+    if (!pick_temp_file(temp_file, NULL)) {
+        memset(password, 0, sizeof(password));
+        return;
     }
-    remove(TEMP_FILE);
+
+    status = compress_file(input_path, temp_file);
+    if (status == SUCCESS) {
+        status = encrypt_file(temp_file, stored_path, password);
+    }
+    remove(temp_file);
     memset(password, 0, sizeof(password));
     if (status == SUCCESS) {
         status = add_record(records, current_user->id, share_with->id,
                             filename, size, stored_path);
+        /* Don't leave a stored file behind that no record points to */
+        if (status != SUCCESS) {
+            remove(stored_path);
+        }
     }
 
     if (status != SUCCESS) {
@@ -361,6 +401,7 @@ static void handle_upload(record_t **records, const user_list_t *users,
 static void handle_retrieve(const record_t *records,
                             const user_t *current_user) {
     char output_path[MAX_PATH_LENGTH];
+    char temp_file[TEMP_NAME_LENGTH];
     char password[INPUT_LENGTH];
     const record_t *record;
     status_t status;
@@ -385,12 +426,17 @@ static void handle_retrieve(const record_t *records,
         return;
     }
 
-    status = decrypt_file(record->path, TEMP_FILE, password);
+    if (!pick_temp_file(temp_file, output_path)) {
+        memset(password, 0, sizeof(password));
+        return;
+    }
+
+    status = decrypt_file(record->path, temp_file, password);
     memset(password, 0, sizeof(password));
     if (status == SUCCESS) {
-        status = decompress_file(TEMP_FILE, output_path);
+        status = decompress_file(temp_file, output_path);
     }
-    remove(TEMP_FILE);
+    remove(temp_file);
 
     if (status == SUCCESS) {
         printf("Saved %s to %s.\n", record->filename, output_path);

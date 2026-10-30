@@ -37,7 +37,7 @@ With no arguments, `./main` starts the interactive program. With an option, it w
 ./main --decrypt notes.enc notes.txt # asks for the password
 ```
 
-Each option also has a short form (`-h`, `-c`, `-x`, `-e`, `-d`). Passwords are asked for rather than passed as arguments, so they are not saved in your shell history.
+Each option also has a short form (`-h`, `-c`, `-x`, `-e`, `-d`). Passwords are asked for rather than passed as arguments, so they are not saved in your shell history. If the output file already exists, you are asked before it is overwritten.
 
 ### Coding conventions
 

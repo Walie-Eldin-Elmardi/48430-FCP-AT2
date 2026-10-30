@@ -19,6 +19,7 @@
 #include <stdlib.h> /* rand */
 #include <string.h> /* strlen, strcpy, strcmp, strncmp, strchr, memcpy,
                        memset */
+#include <limits.h> /* INT_MAX */
 #include "interface_management.h"
 #include "input.h"
 
@@ -499,6 +500,11 @@ status_t create_user(user_list_t *users) {
 
     new_user.id = 1;
     for (i = 0; i < users->count; i++) {
+        /* Adding one to INT_MAX would overflow */
+        if (users->users[i].id == INT_MAX) {
+            printf("No more user IDs are available.\n");
+            return MEMORY_ALLOCATION_FAILED;
+        }
         if (users->users[i].id >= new_user.id) {
             new_user.id = users->users[i].id + 1;
         }

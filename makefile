@@ -15,6 +15,6 @@ debug: $(SRC) $(HDR)
 
 # Remove the built programs and any leftover temporary file
 clean:
-	rm -f main debug transfer.tmp
+	rm -f main debug transfer*.tmp
 
 .PHONY: clean

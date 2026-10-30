@@ -14,6 +14,7 @@
 #include <stdlib.h> /* malloc, free */
 #include <string.h> /* strlen, strcpy, strcmp, strchr */
 #include <time.h>   /* time, localtime, strftime */
+#include <limits.h> /* INT_MAX */
 #include "data_management.h"
 
 /* Longest line the records file can hold: filename, path and 5 numbers */
@@ -174,6 +175,10 @@ status_t add_record(record_t **head, int owner_id, int shared_with_user_id,
     }
 
     for (current = *head; current != NULL; current = current->next) {
+        /* Adding one to INT_MAX would overflow */
+        if (current->id == INT_MAX) {
+            return INVALID_ARGUMENT;
+        }
         if (current->id >= next_id) {
             next_id = current->id + 1;
         }
