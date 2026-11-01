@@ -1,87 +1,67 @@
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
+/*
+ * 48430 Fundamentals of C Programming - Assessment Task 3, Team 31
+ * File: user_interface.c
+ * Author: Georgia
+ *
+ * The main menu, and the upload, retrieve, display and search options it
+ * offers. See user_interface.h for the public functions.
+ */
+#include <stdio.h>  /* printf, fopen, fclose, fgetc, ferror, fseek, ftell,
+                       sprintf, remove */
+#include <string.h> /* strrchr, strlen, strcmp, strcpy, memset */
 #include "user_interface.h"
+#include "input.h"
 #include "compression.h"
 #include "encryption.h"
 
-#define INPUT_LENGTH 256
+/* Holds the compressed file between compressing and encrypting it. If a
+ * file of this name already exists, a number is added (transfer1.tmp,
+ * transfer2.tmp, ...) so that file is never overwritten. */
 #define TEMP_FILE "transfer.tmp"
+#define TEMP_FILE_NUMBERED "transfer%d.tmp"
+#define MAX_TEMP_FILES 100
+#define TEMP_NAME_LENGTH 32
 
-/* login returns the user by value, so current_user points here while logged in */
-static User logged_in_user;
+/* Options on the menu shown when nobody is logged in */
+typedef enum {
+    START_QUIT = 0,
+    START_LOGIN = 1,
+    START_CREATE_ACCOUNT = 2
+} start_option_t;
 
-/*
- * Discards everything left on the current line of stdin.
- * Parameters: None
- * Returns: None
- * Author: Georgia
- */
-static void discard_line(void) {
-    int c;
+/* Options on the menu shown to a logged-in user. Auditors cannot upload,
+ * so their menu starts at MENU_RETRIEVE, and each number shown to them is
+ * one less than the option (see menu_offset). */
+typedef enum {
+    MENU_QUIT = 0,
+    MENU_UPLOAD,
+    MENU_RETRIEVE,
+    MENU_LIST_BY_NAME,
+    MENU_LIST_BY_DATE,
+    MENU_SEARCH,
+    MENU_LOGOUT
+} menu_option_t;
 
-    while ((c = getchar()) != '\n' && c != EOF) {
-        /* discard */
-    }
-}
-
-/*
- * Reads one line from stdin into buffer, without the trailing newline.
- * If the line is longer than the buffer, the rest of it is discarded.
- * Parameters: buffer to fill, size of buffer
- * Returns: 1 if a line was read, 0 on end of input
- * Author: Georgia
- */
-static int read_line(char *buffer, int size) {
-    char *newline;
-
-    if (fgets(buffer, size, stdin) == NULL) {
-        return 0;
-    }
-
-    newline = strchr(buffer, '\n');
-    if (newline != NULL) {
-        *newline = '\0';
-    } else {
-        discard_line();
-    }
-    return 1;
-}
+/* Text shown for each menu_option_t, in the same order */
+static const char *const MENU_LABELS[] = {
+    "Quit",
+    "Upload a file",
+    "Retrieve a file",
+    "Display records sorted by filename",
+    "Display records sorted by upload date",
+    "Search records by filename",
+    "Log out"
+};
 
 /*
- * Prints a prompt and reads a non-empty line from stdin.
- * Parameters: prompt to print, buffer to fill, size of buffer
- * Returns: 1 if a non-empty line was read, 0 otherwise
+ * Gets how much smaller the numbers shown on the menu are than the menu
+ * options, since auditors have no upload option.
+ * Parameters: current user
+ * Returns: 1 for auditors, otherwise 0
  * Author: Georgia
  */
-static int prompt_line(const char *prompt, char *buffer, int size) {
-    printf("%s", prompt);
-    if (!read_line(buffer, size) || buffer[0] == '\0') {
-        printf("No input given.\n");
-        return 0;
-    }
-    return 1;
-}
-
-/*
- * Prints a prompt and reads an integer from stdin.
- * Parameters: prompt to print, pointer to store the integer
- * Returns: 1 if a valid integer was read, 0 otherwise
- * Author: Georgia
- */
-static int prompt_int(const char *prompt, int *value) {
-    char buffer[INPUT_LENGTH];
-    char extra;
-
-    if (!prompt_line(prompt, buffer, sizeof(buffer))) {
-        return 0;
-    }
-    /* Reading one more character catches trailing junk such as "3abc" */
-    if (sscanf(buffer, "%d %c", value, &extra) != 1) {
-        printf("Please enter a number.\n");
-        return 0;
-    }
-    return 1;
+static int menu_offset(const user_t *current_user) {
+    return (current_user->role == AUDITOR) ? 1 : 0;
 }
 
 /*
@@ -96,25 +76,9 @@ static const char *base_name(const char *path) {
 }
 
 /*
- * Checks whether a string contains any whitespace. Filenames and paths are
- * saved to the records file separated by spaces, so they cannot contain any.
- * Parameters: string to check
- * Returns: 1 if the string contains whitespace, otherwise 0
- * Author: Georgia
- */
-static int has_whitespace(const char *str) {
-    for (; *str != '\0'; str++) {
-        if (isspace((unsigned char)*str)) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-/*
  * Gets the size of a file in bytes.
  * Parameters: filename
- * Returns: Size in bytes, or -1 if the file could not be opened
+ * Returns: Size in bytes, or -1 if the file could not be opened or read
  * Author: Georgia
  */
 static long file_size(const char *filename) {
@@ -124,39 +88,28 @@ static long file_size(const char *filename) {
     if (fp == NULL) {
         return -1;
     }
-    fseek(fp, 0, SEEK_END);
+    /* Some systems let fopen open a folder; reading from it then fails */
+    if (fgetc(fp) == EOF && ferror(fp)) {
+        fclose(fp);
+        return -1;
+    }
+    if (fseek(fp, 0, SEEK_END) != 0) {
+        fclose(fp);
+        return -1;
+    }
     size = ftell(fp);
     fclose(fp);
     return size;
 }
 
 /*
- * Returns a message describing a status code, for error output.
- * Parameters: status
- * Returns: Description of the status
- * Author: Georgia
- */
-static const char *status_message(Status status) {
-    switch (status) {
-        case SUCCESS: return "success";
-        case FILE_NOT_FOUND: return "file could not be opened";
-        case MEMORY_ALLOCATION_FAILED: return "out of memory";
-        case INVALID_ARGUMENT: return "invalid input";
-        case RECORD_NOT_FOUND: return "record not found";
-        case INVALID_AUTHENTICATION: return "wrong password";
-    }
-    return "unknown error";
-}
-
-/*
- * Gets the user ID to search records with. Auditors can see every
- * record; everyone else only sees records they own or that are shared
- * with them.
- * Parameters: current_user
+ * Gets the user ID to search records with. Auditors can see every record;
+ * everyone else only sees records they own or that are shared with them.
+ * Parameters: current user
  * Returns: ANY_USER for auditors, otherwise the user's ID
  * Author: Georgia
  */
-static int visible_user_id(const User *current_user) {
+static int visible_user_id(const user_t *current_user) {
     return (current_user->role == AUDITOR) ? ANY_USER : current_user->id;
 }
 
@@ -166,7 +119,7 @@ static int visible_user_id(const User *current_user) {
  * Returns: Name of the role, or "Unknown" if the role is not recognised
  * Author: Georgia
  */
-static const char *role_name(UserRole role) {
+static const char *role_name(user_role_t role) {
     switch (role) {
         case ACCOUNTANT: return "Accountant";
         case CLIENT: return "Client";
@@ -175,63 +128,199 @@ static const char *role_name(UserRole role) {
     return "Unknown";
 }
 
-void print_menu(const User *current_user) {
-    int option = 1;
+/*
+ * Checks whether a user has already uploaded a file with this name. Each
+ * user's files are stored as <user ID>_<filename>.enc, so the name must be
+ * unique among their own uploads.
+ * Parameters: records list, owner's user ID, filename
+ * Returns: 1 if they have, otherwise 0
+ * Author: Georgia
+ */
+static int has_uploaded(const record_t *records, int owner_id,
+                        const char *filename) {
+    const record_t *current;
 
-    printf("\n");
+    for (current = records; current != NULL; current = current->next) {
+        if (current->owner_id == owner_id &&
+            strcmp(current->filename, filename) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
-    if (current_user == NULL) {
-        printf("1. Log in\n");
-        printf("2. Create account\n");
-        printf("0. Quit\n");
-        printf("Enter choice: ");
-        return;
+/*
+ * Checks that retrieving a file to this path will not overwrite one of
+ * the program's own files: the users file, the records file, or a stored
+ * encrypted file. Only the filename part is
+ * compared, so "./1_notes.txt.enc" is caught too.
+ * Parameters: records list, path the user wants to save to
+ * Returns: 1 if the path is safe to write, otherwise 0
+ * Author: Georgia
+ */
+static int is_safe_output_path(const record_t *records, const char *path) {
+    const char *name = base_name(path);
+    const record_t *current;
+    int reserved;
+
+    if (name[0] == '\0') {
+        printf("Please give a file name, not a folder.\n");
+        return 0;
     }
 
-    printf("Logged in as %s (%s)\n", current_user->username,
-           role_name(current_user->role));
-
-    /* Auditors can view records but not upload them, so their options are
-     * numbered from 1 without the upload option (see read_choice) */
-    if (current_user->role != AUDITOR) {
-        printf("%d. Upload a file\n", option++);
+    reserved = strcmp(name, USERS_FILE) == 0 ||
+               strcmp(name, RECORDS_FILE) == 0;
+    for (current = records; current != NULL && !reserved;
+         current = current->next) {
+        reserved = strcmp(name, base_name(current->path)) == 0;
     }
-    printf("%d. Retrieve a file\n", option++);
-    printf("%d. Display records sorted by filename\n", option++);
-    printf("%d. Display records sorted by upload date\n", option++);
-    printf("%d. Search records by filename\n", option++);
-    printf("%d. Log out\n", option);
-    printf("0. Quit\n");
-    printf("Enter choice: ");
+
+    if (reserved) {
+        printf("%s is used by this program to store data. "
+               "Please choose another name.\n", name);
+        return 0;
+    }
+    return 1;
+}
+
+/*
+ * Checks whether a file exists (can be opened for reading).
+ * Parameters: filename
+ * Returns: 1 if it exists, otherwise 0
+ * Author: Georgia
+ */
+static int file_exists(const char *filename) {
+    FILE *fp = fopen(filename, "rb");
+
+    if (fp == NULL) {
+        return 0;
+    }
+    fclose(fp);
+    return 1;
+}
+
+/*
+ * Picks a name for the temporary file that no existing file has, so
+ * writing and then deleting it cannot destroy anyone's file.
+ * Parameters: buffer to store the name, path the temporary file must not
+ *             share a filename with (NULL if none)
+ * Returns: 1 if a free name was found, otherwise 0
+ * Author: Georgia
+ */
+static int pick_temp_file(char name[TEMP_NAME_LENGTH], const char *avoid) {
+    int i;
+
+    for (i = 0; i < MAX_TEMP_FILES; i++) {
+        if (i == 0) {
+            strcpy(name, TEMP_FILE);
+        } else {
+            sprintf(name, TEMP_FILE_NUMBERED, i);
+        }
+        if (!file_exists(name) &&
+            (avoid == NULL || strcmp(base_name(avoid), name) != 0)) {
+            DEBUG_PRINT("using temporary file %s", name);
+            return 1;
+        }
+    }
+    printf("Could not find a free name for a temporary file.\n");
+    return 0;
+}
+
+/*
+ * Asks for a filename and finds the matching record the current user can
+ * see. Different users can upload files with the same name, so if more
+ * than one matches, lists them and asks for the record ID.
+ * Parameters: records list, current user, prompt for the filename
+ * Returns: The chosen record, or NULL if there is none or input was
+ *          invalid
+ * Author: Georgia
+ */
+static const record_t *choose_record(const record_t *records,
+                                     const user_t *current_user,
+                                     const char *prompt) {
+    char filename[MAX_FILENAME_LENGTH];
+    const record_t *record;
+    int user_id = visible_user_id(current_user);
+    int matches;
+    int record_id;
+
+    if (!prompt_line(prompt, filename, sizeof(filename))) {
+        return NULL;
+    }
+
+    matches = count_matching_records(records, user_id, filename);
+    DEBUG_PRINT("%d record(s) called %s visible to user %d", matches,
+                filename, current_user->id);
+    if (matches == 0) {
+        printf("No file called %s is shared with you.\n", filename);
+        return NULL;
+    }
+    if (matches == 1) {
+        return search_record(records, user_id, filename);
+    }
+
+    printf("There are %d files called %s:\n", matches, filename);
+    display_records(records, user_id, filename);
+    if (!prompt_int("ID of the file you want: ", &record_id)) {
+        return NULL;
+    }
+    record = find_record_by_id(records, user_id, record_id);
+    if (record == NULL || strcmp(record->filename, filename) != 0) {
+        printf("None of the files called %s has ID %d.\n", filename,
+               record_id);
+        return NULL;
+    }
+    return record;
+}
+
+/*
+ * Asks for a password for a file twice and checks both match.
+ * Parameters: buffer of INPUT_LENGTH characters to store the password
+ * Returns: 1 if a password was entered and confirmed, otherwise 0
+ * Author: Georgia
+ */
+static int prompt_file_password(char password[INPUT_LENGTH]) {
+    char confirm[INPUT_LENGTH];
+    int matches;
+
+    if (!prompt_line("Password for this file: ", password, INPUT_LENGTH) ||
+        !prompt_line("Confirm password: ", confirm, INPUT_LENGTH)) {
+        return 0;
+    }
+    matches = strcmp(password, confirm) == 0;
+    memset(confirm, 0, sizeof(confirm));
+    if (!matches) {
+        printf("Passwords do not match.\n");
+    }
+    return matches;
 }
 
 /*
  * Asks for a file to upload and who to share it with, then compresses and
- * encrypts it into storage and adds a record for it.
- * Parameters: records (head of records list), current_user
+ * encrypts it into storage, adds a record for it and saves the records.
+ * Parameters: pointer to head of records list, user list, current user
  * Returns: None
  * Author: Georgia
  */
-static void handle_upload(Record **records, const User *current_user) {
+static void handle_upload(record_t **records, const user_list_t *users,
+                          const user_t *current_user) {
     char input_path[MAX_PATH_LENGTH];
     char stored_path[MAX_PATH_LENGTH];
+    char temp_file[TEMP_NAME_LENGTH];
+    char username[INPUT_LENGTH];
     char password[INPUT_LENGTH];
     const char *filename;
-    int shared_with_user_id;
+    const user_t *share_with;
     long size;
-    Status status;
+    status_t status;
 
-    if (!prompt_line("Path of file to upload: ", input_path, sizeof(input_path))) {
-        return;
-    }
-    size = file_size(input_path);
-    if (size < 0) {
-        printf("Could not open %s.\n", input_path);
+    if (!prompt_line("Path of file to upload: ", input_path,
+                     sizeof(input_path))) {
         return;
     }
     filename = base_name(input_path);
     if (filename[0] == '\0') {
-        printf("Please give the path of a file, not a directory.\n");
+        printf("Please give the path of a file, not a folder.\n");
         return;
     }
     if (strlen(filename) >= MAX_FILENAME_LENGTH) {
@@ -242,78 +331,115 @@ static void handle_upload(Record **records, const User *current_user) {
         printf("Filenames cannot contain spaces.\n");
         return;
     }
-    if (search_record(*records, current_user->id, filename) != NULL) {
-        printf("You already have a file called %s.\n", filename);
+    size = file_size(input_path);
+    if (size < 0) {
+        printf("Could not open %s.\n", input_path);
         return;
     }
-    if (!prompt_int("User ID to share with: ", &shared_with_user_id)) {
-        return;
-    }
-    if (shared_with_user_id <= 0) {
-        printf("User ID must be a positive number.\n");
-        return;
-    }
-    if (!prompt_line("Password for this file: ", password, sizeof(password))) {
+    if (has_uploaded(*records, current_user->id, filename)) {
+        printf("You have already uploaded a file called %s.\n", filename);
         return;
     }
 
-    sprintf(stored_path, "%d_%.*s.enc", current_user->id,
-            MAX_PATH_LENGTH - 20, filename);
-
-    status = compress_file(input_path, TEMP_FILE);
-    if (status == SUCCESS) {
-        status = encrypt_file(TEMP_FILE, stored_path, password);
+    if (!prompt_line("Username to share with: ", username,
+                     sizeof(username))) {
+        return;
     }
-    remove(TEMP_FILE);
+    share_with = find_user_by_name(users, username);
+    if (share_with == NULL) {
+        printf("There is no user called %s.\n", username);
+        return;
+    }
+
+    printf("The file is locked with its own password. Give it to %s so "
+           "they can open it.\n", share_with->username);
+    if (!prompt_file_password(password)) {
+        return;
+    }
+
+    sprintf(stored_path, "%d_%s.enc", current_user->id, filename);
+    if (!pick_temp_file(temp_file, NULL)) {
+        memset(password, 0, sizeof(password));
+        return;
+    }
+
+    status = compress_file(input_path, temp_file);
     if (status == SUCCESS) {
-        status = add_record(records, current_user->id, shared_with_user_id,
+        status = encrypt_file(temp_file, stored_path, password);
+    }
+    remove(temp_file);
+    memset(password, 0, sizeof(password));
+    if (status == SUCCESS) {
+        status = add_record(records, current_user->id, share_with->id,
                             filename, size, stored_path);
+        /* Don't leave a stored file behind that no record points to */
+        if (status != SUCCESS) {
+            remove(stored_path);
+        }
     }
 
-    if (status == SUCCESS) {
-        printf("Uploaded %s.\n", filename);
-    } else {
+    if (status != SUCCESS) {
         printf("Upload failed: %s.\n", status_message(status));
+        return;
+    }
+    printf("Uploaded %s and shared it with %s.\n", filename,
+           share_with->username);
+
+    /* Save now, so the record is not lost if the program is killed */
+    if (save_records(RECORDS_FILE, *records) != SUCCESS) {
+        printf("Warning: could not save records to %s.\n", RECORDS_FILE);
     }
 }
 
 /*
- * Asks for a filename, then decrypts and decompresses that file to an
- * output path if the current user is allowed to access it.
- * Parameters: records (head of records list), current_user
+ * Asks which file to retrieve and where to save it, then decrypts and
+ * decompresses it if the current user is allowed to access it.
+ * Parameters: records list, current user
  * Returns: None
  * Author: Georgia
  */
-static void handle_retrieve(const Record *records, const User *current_user) {
-    char filename[MAX_FILENAME_LENGTH];
+static void handle_retrieve(const record_t *records,
+                            const user_t *current_user) {
     char output_path[MAX_PATH_LENGTH];
+    char temp_file[TEMP_NAME_LENGTH];
     char password[INPUT_LENGTH];
-    const Record *record;
-    Status status;
+    const record_t *record;
+    status_t status;
 
-    if (!prompt_line("Filename to retrieve: ", filename, sizeof(filename))) {
-        return;
-    }
-    record = search_record(records, visible_user_id(current_user), filename);
+    record = choose_record(records, current_user, "Filename to retrieve: ");
     if (record == NULL) {
-        printf("No file called %s is shared with you.\n", filename);
         return;
     }
     if (!prompt_line("Save as: ", output_path, sizeof(output_path))) {
         return;
     }
-    if (!prompt_line("Password for this file: ", password, sizeof(password))) {
+    if (!is_safe_output_path(records, output_path)) {
+        return;
+    }
+    if (file_exists(output_path) &&
+        !prompt_yes_no("That file already exists. Overwrite it? (y/n): ")) {
+        printf("Retrieve cancelled.\n");
+        return;
+    }
+    if (!prompt_line("Password for this file: ", password,
+                     sizeof(password))) {
         return;
     }
 
-    status = decrypt_file(record->path, TEMP_FILE, password);
-    if (status == SUCCESS) {
-        status = decompress_file(TEMP_FILE, output_path);
+    if (!pick_temp_file(temp_file, output_path)) {
+        memset(password, 0, sizeof(password));
+        return;
     }
-    remove(TEMP_FILE);
+
+    status = decrypt_file(record->path, temp_file, password);
+    memset(password, 0, sizeof(password));
+    if (status == SUCCESS) {
+        status = decompress_file(temp_file, output_path);
+    }
+    remove(temp_file);
 
     if (status == SUCCESS) {
-        printf("Saved %s to %s.\n", filename, output_path);
+        printf("Saved %s to %s.\n", record->filename, output_path);
     } else {
         printf("Retrieve failed: %s.\n", status_message(status));
     }
@@ -322,89 +448,153 @@ static void handle_retrieve(const Record *records, const User *current_user) {
 /*
  * Asks for a filename and prints the details of that record if the
  * current user can access it.
- * Parameters: records (head of records list), current_user
+ * Parameters: records list, user list, current user
  * Returns: None
  * Author: Georgia
  */
-static void handle_search(const Record *records, const User *current_user) {
-    char filename[MAX_FILENAME_LENGTH];
-    const Record *record;
+static void handle_search(const record_t *records, const user_list_t *users,
+                          const user_t *current_user) {
+    char uploaded[TIMESTAMP_LENGTH];
+    const record_t *record;
+    const user_t *owner;
+    const user_t *shared_with;
 
-    if (!prompt_line("Filename to search for: ", filename, sizeof(filename))) {
-        return;
-    }
-    record = search_record(records, visible_user_id(current_user), filename);
+    record = choose_record(records, current_user, "Filename to search for: ");
     if (record == NULL) {
-        printf("No file called %s is shared with you.\n", filename);
         return;
     }
 
+    owner = find_user_by_id(users, record->owner_id);
+    shared_with = find_user_by_id(users, record->shared_with_user_id);
+    format_timestamp(record->timestamp, uploaded);
+
+    printf("Record ID:   %d\n", record->id);
     printf("Filename:    %s\n", record->filename);
     printf("Size:        %ld bytes\n", record->size);
-    printf("Owner ID:    %d\n", record->owner_id);
-    printf("Shared with: %d\n", record->shared_with_user_id);
-    printf("Uploaded:    %d\n", record->timestamp);
+    printf("Owner:       %s (user ID %d)\n",
+           owner != NULL ? owner->username : "unknown", record->owner_id);
+    printf("Shared with: %s (user ID %d)\n",
+           shared_with != NULL ? shared_with->username : "unknown",
+           record->shared_with_user_id);
+    printf("Uploaded:    %s\n", uploaded);
 }
 
-int read_choice(Record **records, User **current_user) {
+/*
+ * Sorts the records and shows the ones the current user can see.
+ * Parameters: pointer to head of records list, current user, sort option
+ * Returns: None
+ * Author: Georgia
+ */
+static void handle_display(record_t **records, const user_t *current_user,
+                           sort_option_t sort_option) {
+    sort_records(records, sort_option);
+    DEBUG_PRINT("sorted records by %s",
+                sort_option == SORT_BY_NAME ? "filename" : "upload date");
+    display_records(*records, visible_user_id(current_user), NULL);
+}
+
+/*
+ * Carries out a choice from the menu shown when nobody is logged in.
+ * Parameters: choice, user list, current user (set on login)
+ * Returns: None
+ * Author: Georgia
+ */
+static void handle_start_choice(int choice, user_list_t *users,
+                                user_t *current_user) {
+    switch (choice) {
+        case START_LOGIN:
+            *current_user = login(users);
+            if (current_user->id == NO_USER_ID) {
+                return;
+            }
+            break;
+        case START_CREATE_ACCOUNT:
+            if (create_user(users) != SUCCESS) {
+                printf("Could not create account.\n");
+                return;
+            }
+            break;
+        default:
+            printf("Invalid choice.\n");
+            return;
+    }
+
+    /* Save now, so a new account or upgraded password is not lost if the
+     * program is killed */
+    if (save_users(USERS_FILE, users) != SUCCESS) {
+        printf("Warning: could not save users to %s.\n", USERS_FILE);
+    }
+}
+
+void print_menu(const user_t *current_user) {
+    int option;
+    int offset;
+
+    printf("\n");
+
+    if (current_user == NULL || current_user->id == NO_USER_ID) {
+        printf("%d. Log in\n", START_LOGIN);
+        printf("%d. Create account\n", START_CREATE_ACCOUNT);
+        printf("%d. Quit\n", START_QUIT);
+        printf("Enter choice: ");
+        return;
+    }
+
+    printf("Logged in as %s (%s, user ID %d)\n", current_user->username,
+           role_name(current_user->role), current_user->id);
+
+    offset = menu_offset(current_user);
+    for (option = MENU_UPLOAD + offset; option <= MENU_LOGOUT; option++) {
+        printf("%d. %s\n", option - offset, MENU_LABELS[option]);
+    }
+    printf("%d. %s\n", MENU_QUIT, MENU_LABELS[MENU_QUIT]);
+    printf("Enter choice: ");
+}
+
+int read_choice(record_t **records, user_list_t *users,
+                user_t *current_user) {
     int choice;
 
     if (!prompt_int("", &choice)) {
-        if (feof(stdin)) {
-            return 0;
-        }
-        return 1;
+        /* Quit at the end of input, otherwise show the menu again */
+        return !input_ended();
     }
+    DEBUG_PRINT("menu choice %d", choice);
 
-    if (choice == 0) {
+    if (choice == MENU_QUIT) {
         return 0;
     }
-
-    if (*current_user == NULL) {
-        switch (choice) {
-            case 1:
-                logged_in_user = login();
-                if (logged_in_user.id != -1) {
-                    *current_user = &logged_in_user;
-                }
-                break;
-            case 2:
-                if (create_user() != SUCCESS) {
-                    printf("Could not create account.\n");
-                }
-                break;
-            default:
-                printf("Invalid choice.\n");
-        }
+    if (current_user->id == NO_USER_ID) {
+        handle_start_choice(choice, users, current_user);
         return 1;
     }
 
-    /* The auditor menu has no upload option, so shift their choice up by
-     * one to line it up with the options below */
-    if ((*current_user)->role == AUDITOR) {
-        choice++;
+    /* Turn the number shown into a menu option. Choices outside the
+     * menu, such as an auditor's 0 + 1 = MENU_UPLOAD, are caught first. */
+    if (choice < 1 || choice > MENU_LOGOUT - menu_offset(current_user)) {
+        printf("Invalid choice.\n");
+        return 1;
     }
+    choice += menu_offset(current_user);
 
     switch (choice) {
-        case 1:
-            handle_upload(records, *current_user);
+        case MENU_UPLOAD:
+            handle_upload(records, users, current_user);
             break;
-        case 2:
-            handle_retrieve(*records, *current_user);
+        case MENU_RETRIEVE:
+            handle_retrieve(*records, current_user);
             break;
-        case 3:
-        case 4:
-            sort_records(records, (choice == 3) ? SORT_BY_NAME : SORT_BY_DATE);
-            display_records(*records, visible_user_id(*current_user),
-                            (choice == 3) ? SORT_BY_NAME : SORT_BY_DATE,
-                            0);
+        case MENU_LIST_BY_NAME:
+            handle_display(records, current_user, SORT_BY_NAME);
             break;
-        case 5:
-            handle_search(*records, *current_user);
+        case MENU_LIST_BY_DATE:
+            handle_display(records, current_user, SORT_BY_DATE);
             break;
-        case 6:
-            logout(*current_user);
-            *current_user = NULL;
+        case MENU_SEARCH:
+            handle_search(*records, users, current_user);
+            break;
+        case MENU_LOGOUT:
+            logout(current_user);
             printf("Logged out.\n");
             break;
         default:

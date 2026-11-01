@@ -1,26 +1,32 @@
 /*
- * ChaCha20 encryption (RFC 8439) with a key derived from the file's password.
- * Author: Georgia
- */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include "encryption.h"
-
-/*
+ * 48430 Fundamentals of C Programming - Assessment Task 3, Team 31
+ * File: encryption.c
+ * Authors: Wally (design), Georgia
+ *
+ * ChaCha20 encryption (RFC 8439) with a key derived from the file's
+ * password.
+ *
  * Encrypted file layout:
  *   12 bytes   nonce (random per file, stored in the clear)
- *   rest       ChaCha20-encrypted stream of: 8-byte check value, then the file
+ *   rest       ChaCha20-encrypted stream of: 8-byte check value, then the
+ *              file
  * The check value lets decrypt_file tell a wrong password from a right one.
  */
+#include <stdio.h>  /* fopen, fclose, fread, fwrite, ferror, remove */
+#include <stdlib.h> /* rand */
+#include <string.h> /* strlen, memcpy, memset, memcmp */
+#include <time.h>   /* time, clock */
+#include "encryption.h"
 
 #define CHECK_LENGTH 8
 #define KDF_ROUNDS 1000
 
-static const unsigned char CHECK_VALUE[CHECK_LENGTH] = {'4', '8', '4', '3', '0', 'O', 'K', '!'};
+static const unsigned char CHECK_VALUE[CHECK_LENGTH] = {
+    '4', '8', '4', '3', '0', 'O', 'K', '!'
+};
 
-/* ANSI C has no fixed-size types, so keep 32-bit values in unsigned long and mask */
+/* ANSI C has no fixed-size types, so keep 32-bit values in unsigned long
+ * and mask */
 #define U32(x) ((x) & 0xffffffffUL)
 #define ROTL(v, n) U32(((v) << (n)) | ((v) >> (32 - (n))))
 #define QUARTER_ROUND(a, b, c, d) \
@@ -36,7 +42,7 @@ typedef struct {
     unsigned long counter;
     unsigned char block[CHACHA_BLOCK_SIZE];
     int position; /* next unused byte in block */
-} KeyStream;
+} key_stream_t;
 
 /*
  * Reads 4 little-endian bytes as a 32-bit number.
@@ -61,6 +67,7 @@ static void chacha20_block(const unsigned char key[CHACHA_KEY_LENGTH],
                            unsigned char out[CHACHA_BLOCK_SIZE]) {
     unsigned long state[16];
     unsigned long x[16];
+    unsigned long v;
     int i;
 
     /* "expand 32-byte k" */
@@ -92,8 +99,7 @@ static void chacha20_block(const unsigned char key[CHACHA_KEY_LENGTH],
     }
 
     for (i = 0; i < 16; i++) {
-        unsigned long v = U32(x[i] + state[i]);
-
+        v = U32(x[i] + state[i]);
         out[4 * i] = (unsigned char)(v & 0xff);
         out[4 * i + 1] = (unsigned char)((v >> 8) & 0xff);
         out[4 * i + 2] = (unsigned char)((v >> 16) & 0xff);
@@ -102,12 +108,14 @@ static void chacha20_block(const unsigned char key[CHACHA_KEY_LENGTH],
 }
 
 /*
- * XORs a buffer with the next bytes of the keystream (encrypts or decrypts).
+ * XORs a buffer with the next bytes of the keystream (encrypts or
+ * decrypts).
  * Parameters: keystream, buffer, length of buffer
  * Returns: None
  * Author: Georgia
  */
-static void keystream_xor(KeyStream *ks, unsigned char *buffer, size_t length) {
+static void keystream_xor(key_stream_t *ks, unsigned char *buffer,
+                          size_t length) {
     size_t i;
 
     for (i = 0; i < length; i++) {
@@ -120,12 +128,13 @@ static void keystream_xor(KeyStream *ks, unsigned char *buffer, size_t length) {
 }
 
 /*
- * Sets up a keystream from a password and nonce. Counter starts at 1 as in RFC 8439.
+ * Sets up a keystream from a password and nonce. The counter starts at 1
+ * as in RFC 8439.
  * Parameters: keystream to set up, password, nonce
  * Returns: None
  * Author: Georgia
  */
-static void keystream_init(KeyStream *ks, const char *password,
+static void keystream_init(key_stream_t *ks, const char *password,
                            const unsigned char nonce[CHACHA_NONCE_LENGTH]) {
     derive_key(password, ks->key);
     memcpy(ks->nonce, nonce, CHACHA_NONCE_LENGTH);
@@ -135,8 +144,8 @@ static void keystream_init(KeyStream *ks, const char *password,
 
 /*
  * Note: a real program would use a proper key derivation function such as
- * PBKDF2 or Argon2. Without a crypto library we mix the password into the key
- * with the ChaCha20 block function and repeat it to slow down guessing.
+ * PBKDF2 or Argon2. Without a crypto library we mix the password into the
+ * key with the ChaCha20 block function and repeat it to slow down guessing.
  */
 void derive_key(const char *password, unsigned char key[CHACHA_KEY_LENGTH]) {
     unsigned char nonce[CHACHA_NONCE_LENGTH];
@@ -151,8 +160,10 @@ void derive_key(const char *password, unsigned char key[CHACHA_KEY_LENGTH]) {
     /* Absorb the password 32 bytes at a time, plus its length */
     for (i = 0; i < length; i++) {
         key[i % CHACHA_KEY_LENGTH] ^= (unsigned char)password[i];
-        if (i % CHACHA_KEY_LENGTH == CHACHA_KEY_LENGTH - 1 || i == length - 1) {
-            chacha20_block(key, nonce, (unsigned long)(i / CHACHA_KEY_LENGTH), block);
+        if (i % CHACHA_KEY_LENGTH == CHACHA_KEY_LENGTH - 1 ||
+            i == length - 1) {
+            chacha20_block(key, nonce, (unsigned long)(i / CHACHA_KEY_LENGTH),
+                           block);
             memcpy(key, block, CHACHA_KEY_LENGTH);
         }
     }
@@ -163,15 +174,17 @@ void derive_key(const char *password, unsigned char key[CHACHA_KEY_LENGTH]) {
         chacha20_block(key, nonce, (unsigned long)round, block);
         memcpy(key, block, CHACHA_KEY_LENGTH);
     }
+    memset(block, 0, sizeof(block));
 }
 
 /*
- * The nonce only has to be different for every file encrypted with the same
- * password, so it combines the seed, a count of nonces made this run, and
- * random bytes. rand() is seeded once in main, not here, so that seeding it
- * again cannot repeat an earlier nonce.
+ * The nonce only has to be different for every file encrypted with the
+ * same password, so it combines the seed, a count of nonces made this run,
+ * and random bytes. rand() is seeded once in main, not here, so that
+ * seeding it again cannot repeat an earlier nonce.
  */
-void generate_nonce(unsigned char nonce[CHACHA_NONCE_LENGTH], unsigned int seed) {
+void generate_nonce(unsigned char nonce[CHACHA_NONCE_LENGTH],
+                    unsigned int seed) {
     static unsigned long calls = 0;
     int i;
 
@@ -192,7 +205,8 @@ void generate_nonce(unsigned char nonce[CHACHA_NONCE_LENGTH], unsigned int seed)
  * Returns: Final status
  * Author: Georgia
  */
-static Status finish_files(FILE *in, FILE *out, const char *output_filename, Status status) {
+static status_t finish_files(FILE *in, FILE *out, const char *output_filename,
+                             status_t status) {
     if (status == SUCCESS && (ferror(in) || ferror(out))) {
         status = FILE_NOT_FOUND;
     }
@@ -206,16 +220,18 @@ static Status finish_files(FILE *in, FILE *out, const char *output_filename, Sta
     return status;
 }
 
-Status encrypt_file(const char *input_filename, const char *output_filename, const char *password) {
+status_t encrypt_file(const char *input_filename, const char *output_filename,
+                      const char *password) {
     unsigned char nonce[CHACHA_NONCE_LENGTH];
     unsigned char buffer[CHACHA_BLOCK_SIZE];
-    KeyStream ks;
+    key_stream_t ks;
     FILE *in;
     FILE *out;
     size_t n;
-    Status status;
+    status_t status;
 
-    if (input_filename == NULL || output_filename == NULL || password == NULL) {
+    if (input_filename == NULL || output_filename == NULL ||
+        password == NULL) {
         return INVALID_ARGUMENT;
     }
 
@@ -229,7 +245,8 @@ Status encrypt_file(const char *input_filename, const char *output_filename, con
         return FILE_NOT_FOUND;
     }
 
-    /* A fresh nonce per file means the same password never reuses a keystream */
+    /* A fresh nonce per file means the same password never reuses a
+     * keystream */
     generate_nonce(nonce, (unsigned int)time(NULL) ^ (unsigned int)clock());
     if (fwrite(nonce, 1, CHACHA_NONCE_LENGTH, out) != CHACHA_NONCE_LENGTH) {
         return finish_files(in, out, output_filename, FILE_NOT_FOUND);
@@ -246,22 +263,24 @@ Status encrypt_file(const char *input_filename, const char *output_filename, con
     }
 
     status = finish_files(in, out, output_filename, SUCCESS);
+    DEBUG_PRINT("encrypted %s to %s using %lu keystream block(s)",
+                input_filename, output_filename, ks.counter - 1);
     memset(&ks, 0, sizeof(ks));
-
-    DEBUG_PRINT("encrypted %s to %s", input_filename, output_filename);
     return status;
 }
 
-Status decrypt_file(const char *input_filename, const char *output_filename, const char *password) {
+status_t decrypt_file(const char *input_filename, const char *output_filename,
+                      const char *password) {
     unsigned char nonce[CHACHA_NONCE_LENGTH];
     unsigned char buffer[CHACHA_BLOCK_SIZE];
-    KeyStream ks;
+    key_stream_t ks;
     FILE *in;
     FILE *out;
     size_t n;
-    Status status;
+    status_t status;
 
-    if (input_filename == NULL || output_filename == NULL || password == NULL) {
+    if (input_filename == NULL || output_filename == NULL ||
+        password == NULL) {
         return INVALID_ARGUMENT;
     }
 
@@ -272,6 +291,8 @@ Status decrypt_file(const char *input_filename, const char *output_filename, con
 
     if (fread(nonce, 1, CHACHA_NONCE_LENGTH, in) != CHACHA_NONCE_LENGTH ||
         fread(buffer, 1, CHECK_LENGTH, in) != CHECK_LENGTH) {
+        DEBUG_PRINT("%s is too short to be an encrypted file",
+                    input_filename);
         fclose(in);
         return INVALID_ARGUMENT;
     }
@@ -280,6 +301,7 @@ Status decrypt_file(const char *input_filename, const char *output_filename, con
     keystream_init(&ks, password, nonce);
     keystream_xor(&ks, buffer, CHECK_LENGTH);
     if (memcmp(buffer, CHECK_VALUE, CHECK_LENGTH) != 0) {
+        DEBUG_PRINT("check value of %s did not match", input_filename);
         memset(&ks, 0, sizeof(ks));
         fclose(in);
         return INVALID_AUTHENTICATION;
