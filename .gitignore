@@ -8,6 +8,7 @@ debug
 Users.txt
 FilePaths.txt
 *.enc
+*.huf
 transfer*.tmp
 *.pdf
 *.txt
