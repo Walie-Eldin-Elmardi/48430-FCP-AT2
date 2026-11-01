@@ -9,3 +9,5 @@ Users.txt
 FilePaths.txt
 *.enc
 transfer*.tmp
+*.pdf
+*.txt
